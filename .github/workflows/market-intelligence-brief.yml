@@ -1,8 +1,10 @@
 name: OMNIS Weekly Market Intelligence Brief
+
 on:
   schedule:
     - cron: "30 6 * * 1"
   workflow_dispatch:
+
 jobs:
   generate-brief:
     runs-on: ubuntu-latest
@@ -10,10 +12,94 @@ jobs:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       GMAIL_USER: ${{ secrets.GMAIL_USER }}
       GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v4
         with:
           python-version: "3.11"
-      - run: pip install feedparser anthropic --break-system-packages
-      - run: python scripts/market_intelligence_brief.py
+
+      - name: Install dependencies
+        run: pip install feedparser anthropic --break-system-packages
+
+      - name: Run OMNIS Market Intelligence Brief
+        run: |
+          python3 - << 'PYEOF'
+          import feedparser, anthropic, smtplib, os
+          from email.mime.text import MIMEText
+          from email.mime.multipart import MIMEMultipart
+          from datetime import datetime
+
+          RSS_FEEDS = [
+              "https://techcrunch.com/feed/",
+              "https://www.finextra.com/rss/headlines.aspx",
+              "https://www.jis.gov.jm/feed/",
+              "https://jamaicaobserver.com/feed/",
+              "https://jamaica-gleaner.com/feed",
+          ]
+
+          BIH_CONTEXT = (
+              "You are OMNIS - market intelligence engine of Business Intelligence Holdings (BIH), "
+              "a Jamaican AI consulting firm. Products: FHILE (AI lending intelligence) and CAIOR "
+              "(AI readiness scoring). Target: credit unions, commercial banks, DFIs in Jamaica and "
+              "Caribbean. Pipeline: FHCCU (proposal pending JMD 6M-10M), First Global Bank (demo "
+              "scheduled), DBJ (active contract JMD 9.6M/yr). Expansion: Jamaica 2026, T&T + "
+              "Barbados 2027, Cayman 2028."
+          )
+
+          def fetch_articles():
+              articles = []
+              for url in RSS_FEEDS:
+                  try:
+                      feed = feedparser.parse(url)
+                      for entry in feed.entries[:4]:
+                          title = entry.get("title", "")
+                          summary = entry.get("summary", entry.get("description", ""))[:350]
+                          source = feed.feed.get("title", url)
+                          articles.append(f"TITLE: {title}\nSUMMARY: {summary}\nSOURCE: {source}")
+                  except Exception as e:
+                      print(f"Feed error {url}: {e}")
+              return "\n\n---\n\n".join(articles[:25])
+
+          def generate_brief(articles):
+              client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+              week = datetime.now().strftime("%B %d, %Y")
+              prompt = (
+                  f"{BIH_CONTEXT}\n\nArticles this week:\n{articles}\n\n"
+                  f"Generate OMNIS Weekly Brief for week of {week}.\n\n"
+                  "SECTION 1: JAMAICA & CARIBBEAN (Top 5 stories - headline, source, BIH relevance, action)\n"
+                  "SECTION 2: GLOBAL AI & FINTECH TRENDS (Top 3 - trend, why it matters to BIH, response)\n"
+                  "SECTION 3: FHILE PIPELINE INTELLIGENCE (news about FHCCU, First Global Bank, JCCUL, JN Group, NCB, DBJ, Mairtrans - or state none)\n"
+                  "SECTION 4: LINKEDIN THOUGHT LEADERSHIP HOOKS (5 opening lines for Omaro)\n"
+                  "SECTION 5: OMNIS RECOMMENDATIONS (Top 3 actions this week - name people, institutions, deadlines)\n\n"
+                  "Plain text. CAPS section headers."
+              )
+              msg = client.messages.create(
+                  model="claude-sonnet-4-20250514",
+                  max_tokens=2500,
+                  messages=[{"role": "user", "content": prompt}]
+              )
+              return msg.content[0].text
+
+          def send_email(brief):
+              week = datetime.now().strftime("%B %d, %Y")
+              msg = MIMEMultipart()
+              msg["From"] = os.environ["GMAIL_USER"]
+              msg["To"] = os.environ["GMAIL_USER"]
+              msg["Subject"] = f"OMNIS Weekly Brief - Week of {week}"
+              msg.attach(MIMEText(brief, "plain"))
+              with smtplib.SMTP_SSL("smtp.gmail.com", 465) as s:
+                  s.login(os.environ["GMAIL_USER"], os.environ["GMAIL_APP_PASSWORD"])
+                  s.send_message(msg)
+              print(f"Brief sent for week of {week}")
+
+          print("Fetching articles...")
+          articles = fetch_articles()
+          print(f"Fetched {len([a for a in articles.split('---') if a.strip()])} articles")
+          print("Generating brief with Claude...")
+          brief = generate_brief(articles)
+          print("Sending email...")
+          send_email(brief)
+          print("Done.")
+          PYEOF
