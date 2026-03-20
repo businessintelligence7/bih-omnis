@@ -1,7 +1,7 @@
-name: OMNIS Bootstrap — Push All Scripts
+name: OMNIS Bootstrap - Push All Scripts
 
 on:
-  workflow_dispatch:   # Run once manually then this workflow self-disables
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -20,187 +20,214 @@ jobs:
 
       - name: Write market intelligence brief script
         run: |
-          cat > scripts/market_intelligence_brief.py << 'PYEOF'
-import feedparser, anthropic, smtplib, os
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-from datetime import datetime
+          cat << 'PYEOF' > scripts/market_intelligence_brief.py
+          import feedparser, anthropic, smtplib, os
+          from email.mime.text import MIMEText
+          from email.mime.multipart import MIMEMultipart
+          from datetime import datetime
 
-RSS_FEEDS = [
-    "https://techcrunch.com/feed/",
-    "https://www.finextra.com/rss/headlines.aspx",
-    "https://www.jis.gov.jm/feed/",
-    "https://jamaicaobserver.com/feed/",
-    "https://jamaica-gleaner.com/feed",
-    "https://www.imf.org/en/News/rss",
-]
+          RSS_FEEDS = [
+              "https://techcrunch.com/feed/",
+              "https://www.finextra.com/rss/headlines.aspx",
+              "https://www.jis.gov.jm/feed/",
+              "https://jamaicaobserver.com/feed/",
+              "https://jamaica-gleaner.com/feed",
+              "https://www.imf.org/en/News/rss",
+          ]
 
-BIH_CONTEXT = "You are OMNIS - market intelligence engine of BIH, a Jamaican AI consulting firm. Products: FHILE (AI lending intelligence) and CAIOR (AI readiness scoring). Target: credit unions, commercial banks, DFIs in Jamaica and Caribbean. Pipeline: FHCCU (proposal pending JMD 6M-10M), First Global Bank (demo scheduled), DBJ (active contract JMD 9.6M/yr). Expansion: Jamaica 2026, T&T + Barbados 2027."
+          BIH_CONTEXT = (
+              "You are OMNIS - market intelligence engine of BIH, a Jamaican AI consulting firm. "
+              "Products: FHILE (AI lending intelligence) and CAIOR (AI readiness scoring). "
+              "Target: credit unions, commercial banks, DFIs in Jamaica and Caribbean. "
+              "Pipeline: FHCCU (proposal pending JMD 6M-10M), First Global Bank (demo scheduled), DBJ (active JMD 9.6M/yr). "
+              "Expansion: Jamaica 2026, T&T + Barbados 2027, Cayman 2028."
+          )
 
-def fetch_articles():
-    articles = []
-    for url in RSS_FEEDS:
-        try:
-            feed = feedparser.parse(url)
-            for entry in feed.entries[:4]:
-                articles.append(f"TITLE: {entry.get('title','')}\nSUMMARY: {entry.get('summary', entry.get('description',''))[:350]}\nSOURCE: {feed.feed.get('title',url)}")
-        except Exception as e:
-            print(f"Feed error {url}: {e}")
-    return "\n\n---\n\n".join(articles[:28])
+          def fetch_articles():
+              articles = []
+              for url in RSS_FEEDS:
+                  try:
+                      feed = feedparser.parse(url)
+                      for entry in feed.entries[:4]:
+                          title = entry.get("title", "")
+                          summary = entry.get("summary", entry.get("description", ""))[:350]
+                          source = feed.feed.get("title", url)
+                          articles.append(f"TITLE: {title}\nSUMMARY: {summary}\nSOURCE: {source}")
+                  except Exception as e:
+                      print(f"Feed error {url}: {e}")
+              return "\n\n---\n\n".join(articles[:28])
 
-def generate_brief(articles):
-    client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
-    week = datetime.now().strftime("%B %d, %Y")
-    prompt = f"{BIH_CONTEXT}\n\nArticles:\n{articles}\n\nGenerate OMNIS Weekly Brief for week of {week}.\n\nSections:\n1. JAMAICA & CARIBBEAN (Top 5 — headline, source, summary, BIH relevance, action)\n2. GLOBAL AI & FINTECH TRENDS (Top 3 — trend, why it matters, BIH response)\n3. FHILE PIPELINE INTELLIGENCE\n4. LINKEDIN THOUGHT LEADERSHIP HOOKS (5 opening lines)\n5. OMNIS RECOMMENDATIONS (Top 3 actions this week — name people, institutions, deadlines)\n\nPlain text. CAPS headers."
-    msg = client.messages.create(model="claude-sonnet-4-20250514", max_tokens=2500, messages=[{"role":"user","content":prompt}])
-    return msg.content[0].text
+          def generate_brief(articles):
+              client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+              week = datetime.now().strftime("%B %d, %Y")
+              prompt = (
+                  f"{BIH_CONTEXT}\n\nArticles:\n{articles}\n\n"
+                  f"Generate OMNIS Weekly Brief for week of {week}.\n\n"
+                  "Sections:\n"
+                  "1. JAMAICA & CARIBBEAN (Top 5 - headline, source, summary, BIH relevance, action)\n"
+                  "2. GLOBAL AI & FINTECH TRENDS (Top 3 - trend, why it matters, BIH response)\n"
+                  "3. FHILE PIPELINE INTELLIGENCE\n"
+                  "4. LINKEDIN THOUGHT LEADERSHIP HOOKS (5 opening lines)\n"
+                  "5. OMNIS RECOMMENDATIONS (Top 3 actions this week)\n\n"
+                  "Plain text. CAPS headers."
+              )
+              msg = client.messages.create(
+                  model="claude-sonnet-4-20250514",
+                  max_tokens=2500,
+                  messages=[{"role": "user", "content": prompt}]
+              )
+              return msg.content[0].text
 
-def send_email(brief):
-    week = datetime.now().strftime("%B %d, %Y")
-    msg = MIMEMultipart()
-    msg["From"] = os.environ["GMAIL_USER"]
-    msg["To"] = os.environ["GMAIL_USER"]
-    msg["Subject"] = f"OMNIS Weekly Brief — Week of {week}"
-    msg.attach(MIMEText(brief,"plain"))
-    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as s:
-        s.login(os.environ["GMAIL_USER"], os.environ["GMAIL_APP_PASSWORD"])
-        s.send_message(msg)
-    print(f"Brief sent for week of {week}")
+          def send_email(brief):
+              week = datetime.now().strftime("%B %d, %Y")
+              msg = MIMEMultipart()
+              msg["From"] = os.environ["GMAIL_USER"]
+              msg["To"] = os.environ["GMAIL_USER"]
+              msg["Subject"] = f"OMNIS Weekly Brief - Week of {week}"
+              msg.attach(MIMEText(brief, "plain"))
+              with smtplib.SMTP_SSL("smtp.gmail.com", 465) as s:
+                  s.login(os.environ["GMAIL_USER"], os.environ["GMAIL_APP_PASSWORD"])
+                  s.send_message(msg)
+              print(f"Brief sent for week of {week}")
 
-if __name__ == "__main__":
-    print("Fetching articles...")
-    a = fetch_articles()
-    print("Generating brief...")
-    b = generate_brief(a)
-    print("Sending email...")
-    send_email(b)
-    print("Done.")
-PYEOF
+          if __name__ == "__main__":
+              print("Fetching articles...")
+              a = fetch_articles()
+              print("Generating brief...")
+              b = generate_brief(a)
+              print("Sending email...")
+              send_email(b)
+              print("Done.")
+          PYEOF
 
       - name: Write CAIOR scoring script
         run: |
-          cat > scripts/caior_scoring.py << 'PYEOF'
-"""CAIOR AI Readiness Scoring Engine"""
-import anthropic, json, os
+          cat << 'PYEOF' > scripts/caior_scoring.py
+          import anthropic, json, os
 
-PROMPT = """You are the CAIOR scoring engine for BIH. Score organisations on AI readiness across 5 dimensions (20pts each = 100 total):
-1. Data Infrastructure
-2. AI Talent & Skills
-3. Technology Stack
-4. Leadership & Strategy
-5. Regulatory & Compliance
+          PROMPT = (
+              "You are the CAIOR scoring engine for BIH. Score organisations on AI readiness "
+              "across 5 dimensions (20pts each = 100 total): "
+              "1. Data Infrastructure, 2. AI Talent & Skills, 3. Technology Stack, "
+              "4. Leadership & Strategy, 5. Regulatory & Compliance. "
+              "Bands: Platinum 85-100, Gold 70-84, Silver 55-69, Bronze 40-54, Foundation 25-39, Baseline 0-24. "
+              "Respond in JSON only: "
+              "{\"data_infrastructure_score\":N,\"ai_talent_score\":N,\"technology_stack_score\":N,"
+              "\"leadership_strategy_score\":N,\"regulatory_compliance_score\":N,\"total_score\":N,"
+              "\"score_band\":\"Silver\",\"primary_recommendation\":\"FHILE\","
+              "\"estimated_opportunity_value_usd\":N,\"top_gaps\":[\"gap1\",\"gap2\",\"gap3\"],"
+              "\"summary\":\"2-3 sentence summary\"}"
+          )
 
-Bands: Platinum 85-100, Gold 70-84, Silver 55-69, Bronze 40-54, Foundation 25-39, Baseline 0-24.
+          def score_organisation(form_data):
+              client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+              msg = client.messages.create(
+                  model="claude-sonnet-4-20250514",
+                  max_tokens=800,
+                  messages=[{"role": "user", "content": f"{PROMPT}\n\nFORM DATA:\n{json.dumps(form_data, indent=2)}"}]
+              )
+              text = msg.content[0].text.strip()
+              if "```" in text:
+                  text = text.split("```")[1]
+                  if text.startswith("json"):
+                      text = text[4:]
+              return json.loads(text.strip())
 
-Respond in JSON only:
-{"data_infrastructure_score":N,"ai_talent_score":N,"technology_stack_score":N,"leadership_strategy_score":N,"regulatory_compliance_score":N,"total_score":N,"score_band":"Silver","primary_recommendation":"FHILE","estimated_opportunity_value_usd":N,"top_gaps":["gap1","gap2","gap3"],"summary":"2-3 sentence summary"}"""
-
-def score_organisation(form_data: dict) -> dict:
-    client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
-    msg = client.messages.create(model="claude-sonnet-4-20250514", max_tokens=800, messages=[{"role":"user","content":f"{PROMPT}\n\nFORM DATA:\n{json.dumps(form_data,indent=2)}"}])
-    text = msg.content[0].text.strip()
-    if "```" in text:
-        text = text.split("```")[1]
-        if text.startswith("json"):
-            text = text[4:]
-    return json.loads(text.strip())
-
-if __name__ == "__main__":
-    test = {"organisation_name":"Test CU","sector":"Credit Union","primary_pain_point":"Rising delinquency, manual processes"}
-    print(json.dumps(score_organisation(test), indent=2))
-PYEOF
+          if __name__ == "__main__":
+              test = {"organisation_name": "Test CU", "sector": "Credit Union", "primary_pain_point": "Rising delinquency"}
+              print(json.dumps(score_organisation(test), indent=2))
+          PYEOF
 
       - name: Write consulting docs script
         run: |
-          cat > scripts/consulting_docs.py << 'PYEOF'
-"""BIH Consulting Documentation Automation"""
-import anthropic, os, argparse
+          cat << 'PYEOF' > scripts/consulting_docs.py
+          import anthropic, os, argparse
 
-PROMPT = """You are BIH's Consulting Documentation AI. Convert meeting notes into a structured consulting document.
+          PROMPT = (
+              "You are BIH Consulting Documentation AI. Convert meeting notes into a structured document.\n\n"
+              "Sections:\n"
+              "MEETING SUMMARY (date, attendees, objective, outcome)\n"
+              "CLIENT PAIN POINTS (ranked by urgency)\n"
+              "AUTOMATION OPPORTUNITIES (description, BIH product match, estimated value, effort)\n"
+              "ACTION ITEMS (action | owner | deadline | priority)\n"
+              "PROPOSED NEXT STEPS (max 3)\n"
+              "CLIENT FOLLOW-UP EMAIL (ready to send from Omaro Hutchinson)\n\n"
+              "Plain text. CAPS headers."
+          )
 
-Sections:
-MEETING SUMMARY (date, attendees, objective, outcome)
-CLIENT PAIN POINTS (ranked by urgency — description, impact, urgency)
-AUTOMATION OPPORTUNITIES (description, BIH product match, estimated value, effort)
-ACTION ITEMS (action | owner | deadline | priority)
-PROPOSED NEXT STEPS (max 3)
-CLIENT FOLLOW-UP EMAIL (ready to send from Omaro Hutchinson)
+          def generate_docs(notes, client_name):
+              ai = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+              msg = ai.messages.create(
+                  model="claude-sonnet-4-20250514",
+                  max_tokens=2000,
+                  messages=[{"role": "user", "content": f"{PROMPT}\n\nCLIENT: {client_name}\n\nNOTES:\n{notes}"}]
+              )
+              return msg.content[0].text
 
-Plain text. CAPS headers."""
-
-def generate_docs(notes: str, client_name: str) -> str:
-    ai = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
-    msg = ai.messages.create(model="claude-sonnet-4-20250514", max_tokens=2000, messages=[{"role":"user","content":f"{PROMPT}\n\nCLIENT: {client_name}\n\nNOTES:\n{notes}"}])
-    return msg.content[0].text
-
-if __name__ == "__main__":
-    p = argparse.ArgumentParser()
-    p.add_argument("--notes", required=True)
-    p.add_argument("--client", required=True)
-    args = p.parse_args()
-    print(generate_docs(args.notes, args.client))
-PYEOF
+          if __name__ == "__main__":
+              p = argparse.ArgumentParser()
+              p.add_argument("--notes", required=True)
+              p.add_argument("--client", required=True)
+              args = p.parse_args()
+              print(generate_docs(args.notes, args.client))
+          PYEOF
 
       - name: Write scripts README
         run: |
-          cat > scripts/README.md << 'EOF'
-# BIH OMNIS Scripts
+          cat << 'EOF' > scripts/README.md
+          # BIH OMNIS Scripts
 
-| Script | Purpose | Trigger |
-|--------|---------|---------|
-| market_intelligence_brief.py | Weekly market intel brief → Gmail | Every Monday 06:30 UTC |
-| caior_scoring.py | CAIOR AI readiness scoring | On demand |
-| consulting_docs.py | Meeting notes → consulting deliverables | On demand |
+          | Script | Purpose | Trigger |
+          |--------|---------|---------|
+          | market_intelligence_brief.py | Weekly market intel brief to Gmail | Every Monday 06:30 UTC |
+          | caior_scoring.py | CAIOR AI readiness scoring | On demand |
+          | consulting_docs.py | Meeting notes to consulting deliverables | On demand |
 
-## Required Secrets (Settings → Secrets → Actions)
-- ANTHROPIC_API_KEY — from console.anthropic.com
-- GMAIL_USER — businessintelligenceinst@gmail.com
-- GMAIL_APP_PASSWORD — Gmail App Password
-- SUPABASE_ANON_KEY — already set
-- SUPABASE_URL — https://ipbwrnawhnnjjdnmlvaq.supabase.co
-EOF
+          ## Required GitHub Secrets
+          | Secret | Value |
+          |--------|-------|
+          | ANTHROPIC_API_KEY | From console.anthropic.com |
+          | GMAIL_USER | businessintelligenceinst@gmail.com |
+          | GMAIL_APP_PASSWORD | Gmail App Password |
+          | SUPABASE_ANON_KEY | Already set |
+          | SUPABASE_URL | https://ipbwrnawhnnjjdnmlvaq.supabase.co |
+          EOF
 
-      - name: Write market intelligence brief workflow
+      - name: Write market intelligence workflow
         run: |
-          cat > .github/workflows/market-intelligence-brief.yml << 'EOF'
-name: OMNIS Weekly Market Intelligence Brief
-on:
-  schedule:
-    - cron: "30 6 * * 1"
-  workflow_dispatch:
-jobs:
-  generate-brief:
-    runs-on: ubuntu-latest
-    env:
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-      GMAIL_USER: ${{ secrets.GMAIL_USER }}
-      GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v4
-        with:
-          python-version: "3.11"
-      - run: pip install feedparser anthropic --break-system-packages
-      - run: python scripts/market_intelligence_brief.py
-EOF
+          mkdir -p .github/workflows
+          cat << 'EOF' > .github/workflows/market-intelligence-brief.yml
+          name: OMNIS Weekly Market Intelligence Brief
+          on:
+            schedule:
+              - cron: "30 6 * * 1"
+            workflow_dispatch:
+          jobs:
+            generate-brief:
+              runs-on: ubuntu-latest
+              env:
+                ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+                GMAIL_USER: ${{ secrets.GMAIL_USER }}
+                GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+              steps:
+                - uses: actions/checkout@v4
+                - uses: actions/setup-python@v4
+                  with:
+                    python-version: "3.11"
+                - run: pip install feedparser anthropic --break-system-packages
+                - run: python scripts/market_intelligence_brief.py
+          EOF
 
-      - name: Commit all scripts
+      - name: Commit and push all scripts
         run: |
           git config user.name "OMNIS Bootstrap"
           git config user.email "businessintelligenceinst@gmail.com"
           git add scripts/ .github/workflows/market-intelligence-brief.yml
-          git commit -m "Add OMNIS scripts: market brief, CAIOR scoring, consulting docs"
+          git diff --staged --quiet || git commit -m "Add OMNIS scripts: market brief, CAIOR scoring, consulting docs"
           git push
 
-      - name: Bootstrap complete
+      - name: Done
         run: |
-          echo "✅ All OMNIS scripts pushed to bih-omnis"
-          echo "Scripts added:"
-          echo "  - scripts/market_intelligence_brief.py"
-          echo "  - scripts/caior_scoring.py"
-          echo "  - scripts/consulting_docs.py"
-          echo "  - scripts/README.md"
-          echo "  - .github/workflows/market-intelligence-brief.yml"
-          echo ""
-          echo "Next: Add ANTHROPIC_API_KEY, GMAIL_USER, GMAIL_APP_PASSWORD to repo secrets"
-          echo "Then: Run 'OMNIS Weekly Market Intelligence Brief' workflow manually to test"
+          echo "All OMNIS scripts pushed successfully"
+          echo "Next: add ANTHROPIC_API_KEY, GMAIL_USER, GMAIL_APP_PASSWORD to repo secrets"
+          echo "Then run OMNIS Weekly Market Intelligence Brief workflow to test"
