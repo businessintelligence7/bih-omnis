@@ -1,0 +1,66 @@
+name: Supabase Keep-Alive
+
+on:
+  schedule:
+    - cron: '0 8 */5 * *'   # Every 5 days at 8am UTC (4am Jamaica time)
+  workflow_dispatch:          # Manual trigger from GitHub UI anytime
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Ping Supabase — OMNIS
+        run: |
+          RESPONSE=$(curl -s \
+            -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}" \
+            "https://ipbwrnawhnnjjdnmlvaq.supabase.co/rest/v1/keepalive?select=ping")
+          echo "Response: $RESPONSE"
+          if [[ "$RESPONSE" == *"ping"* ]]; then
+            echo "✅ Supabase is alive"
+          else
+            echo "❌ Unexpected response — check manually"
+            exit 1
+          fi
+```
+
+Scroll down → **Commit new file** → commit directly to `main`.
+
+---
+
+## Step 4 — Test It Manually Right Now
+
+Don't wait 5 days. Go to:
+
+**Actions** tab → **Supabase Keep-Alive** (left sidebar) → **Run workflow** → **Run workflow**
+
+Watch it run. You should see a green tick and the log showing:
+```
+Response: [{"ping":1}]
+✅ Supabase is alive
+```
+
+If it goes green, keep-alive is done. ✅
+
+---
+
+## Step 5 — Webhook 1 through 4
+
+Go to your **Supabase Dashboard** → **Database** → **Webhooks** → **Create a new hook**
+
+---
+
+**Webhook 1 — CAIOR Gold/Silver → OMNIS Pipeline alert**
+```
+Name:        caior_tier_alert
+Table:       caior → assessments
+Events:      ✅ Insert
+Type:        HTTP Request
+URL:         https://hooks.slack.com/placeholder  ← put anything for now, swap later
+HTTP Method: POST
+```
+
+HTTP Headers — add:
+```
+Content-Type    application/json
