@@ -19,8 +19,8 @@ BIH_CONTEXT = (
     "You are OMNIS - market intelligence engine of BIH, a Jamaican AI consulting firm. "
     "Products: FHILE (AI lending intelligence) and CAIOR (AI readiness scoring). "
     "Target: credit unions, commercial banks, DFIs in Jamaica and Caribbean. "
-    "Pipeline: FHCCU (proposal pending JMD 6M-10M), First Global Bank (demo scheduled), DBJ (active JMD 9.6M/yr). "
-    "Expansion: Jamaica 2026, T&T + Barbados 2027, Cayman 2028."
+    "Pipeline: FHCCU (proposal pending JMD 6M-10M), First Global Bank (demo scheduled), "
+    "DBJ (active JMD 9.6M/yr). Expansion: Jamaica 2026, T&T + Barbados 2027, Cayman 2028."
 )
 
 
@@ -31,28 +31,52 @@ def fetch_articles():
             feed = feedparser.parse(url)
             for entry in feed.entries[:4]:
                 title = entry.get("title", "")
-                summary = entry.get("summary", entry.get("description", ""))[:350]
+                raw = entry.get("summary", entry.get("description", ""))
+                summary = raw[:350]
                 source = feed.feed.get("title", url)
-                line = "TITLE: " + title + "\nSUMMARY: " + summary + "\nSOURCE: " + source
-                articles.append(line)
+                row = "TITLE: " + title + "
+" + "SUMMARY: " + summary + "
+" + "SOURCE: " + source
+                articles.append(row)
         except Exception as e:
-            print("Feed error " + url + ": " + str(e))
-    return "\n\n---\n\n".join(articles[:28])
+            print("Feed error: " + str(e))
+    return "
+
+---
+
+".join(articles[:28])
 
 
 def generate_brief(articles):
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     week = datetime.now().strftime("%B %d, %Y")
+    sections = (
+        "1. JAMAICA & CARIBBEAN (Top 5 - headline, source, summary, BIH relevance, action)
+"
+        "2. GLOBAL AI & FINTECH TRENDS (Top 3 - trend, why it matters, BIH response)
+"
+        "3. FHILE PIPELINE INTELLIGENCE
+"
+        "4. LINKEDIN THOUGHT LEADERSHIP HOOKS (5 opening lines)
+"
+        "5. OMNIS RECOMMENDATIONS (Top 3 actions this week)
+"
+    )
     prompt = (
-        BIH_CONTEXT + "\n\nArticles:\n" + articles + "\n\n"
-        "Generate OMNIS Weekly Brief for week of " + week + ".\n\n"
-        "Sections:\n"
-        "1. JAMAICA & CARIBBEAN (Top 5 - headline, source, summary, BIH relevance, action)\n"
-        "2. GLOBAL AI & FINTECH TRENDS (Top 3 - trend, why it matters, BIH response)\n"
-        "3. FHILE PIPELINE INTELLIGENCE\n"
-        "4. LINKEDIN THOUGHT LEADERSHIP HOOKS (5 opening lines)\n"
-        "5. OMNIS RECOMMENDATIONS (Top 3 actions this week)\n\n"
-        "Plain text only. CAPS for section headers. No markdown."
+        BIH_CONTEXT
+        + "
+
+Articles:
+" + articles
+        + "
+
+Generate OMNIS Weekly Brief for week of " + week + ".
+
+"
+        + "Sections:
+" + sections
+        + "
+Plain text only. CAPS for section headers. No markdown."
     )
     msg = client.messages.create(
         model="claude-sonnet-4-20250514",
