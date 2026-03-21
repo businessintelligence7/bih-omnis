@@ -34,49 +34,29 @@ def fetch_articles():
                 raw = entry.get("summary", entry.get("description", ""))
                 summary = raw[:350]
                 source = feed.feed.get("title", url)
-                row = "TITLE: " + title + "
-" + "SUMMARY: " + summary + "
-" + "SOURCE: " + source
+                row = "TITLE: " + title + "\nSUMMARY: " + summary + "\nSOURCE: " + source
                 articles.append(row)
         except Exception as e:
             print("Feed error: " + str(e))
-    return "
-
----
-
-".join(articles[:28])
+    return "\n\n---\n\n".join(articles[:28])
 
 
 def generate_brief(articles):
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     week = datetime.now().strftime("%B %d, %Y")
     sections = (
-        "1. JAMAICA & CARIBBEAN (Top 5 - headline, source, summary, BIH relevance, action)
-"
-        "2. GLOBAL AI & FINTECH TRENDS (Top 3 - trend, why it matters, BIH response)
-"
-        "3. FHILE PIPELINE INTELLIGENCE
-"
-        "4. LINKEDIN THOUGHT LEADERSHIP HOOKS (5 opening lines)
-"
-        "5. OMNIS RECOMMENDATIONS (Top 3 actions this week)
-"
+        "1. JAMAICA & CARIBBEAN (Top 5 - headline, source, summary, BIH relevance, action)\n"
+        "2. GLOBAL AI & FINTECH TRENDS (Top 3 - trend, why it matters, BIH response)\n"
+        "3. FHILE PIPELINE INTELLIGENCE\n"
+        "4. LINKEDIN THOUGHT LEADERSHIP HOOKS (5 opening lines)\n"
+        "5. OMNIS RECOMMENDATIONS (Top 3 actions this week)\n"
     )
     prompt = (
         BIH_CONTEXT
-        + "
-
-Articles:
-" + articles
-        + "
-
-Generate OMNIS Weekly Brief for week of " + week + ".
-
-"
-        + "Sections:
-" + sections
-        + "
-Plain text only. CAPS for section headers. No markdown."
+        + "\n\nArticles:\n" + articles
+        + "\n\nGenerate OMNIS Weekly Brief for week of " + week + ".\n\n"
+        + "Sections:\n" + sections
+        + "\nPlain text only. CAPS for section headers. No markdown."
     )
     msg = client.messages.create(
         model="claude-sonnet-4-20250514",
@@ -96,7 +76,9 @@ def send_email(brief):
     with smtplib.SMTP_SSL("smtp.gmail.com", 465) as s:
         s.login(os.environ["GMAIL_USER"], os.environ["GMAIL_APP_PASSWORD"])
         s.send_message(msg)
-    print("Brief sent for week of " + week)
+    print("Brief sent for week of " + week
+    	
+)
 
 
 if __name__ == "__main__":
